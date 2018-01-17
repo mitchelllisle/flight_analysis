@@ -1,0 +1,94 @@
+---
+title: "BeatlesPlayground"
+author: "Mitchell Lisle"
+date: "31/12/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(jsonlite)
+library(highcharter)
+library(exploratory)
+library(treemap)
+library(viridisLite)
+
+source("R/processing.R")
+source("R/visualisations.R")
+
+passengers <- read.csv("data/passengerData.csv") %>% filter(!stringr::str_detect(Metric, "TOTAL"))
+flights <- read.csv("data/flightData.csv") %>% filter(!stringr::str_detect(AIRPORT, "TOTAL"))
+
+mlrTheme <- hc_theme(
+  chart = list(
+    backgroundColor = "#FFFFFF"
+  )
+)
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Domestic Flights by Year (Australia)
+```{r}
+domesticPassengersByYear <- passengers %>%
+  group_by(Year) %>%
+  summarise(totalPassengers = sum(DomesticTOTAL))
+
+internationalPassengersByYear <- passengers %>%
+  group_by(Year) %>%
+  summarise(totalPassengers = sum(internationalTOTAL))
+
+colours <- c("#E34963", "#4A90E2")
+lineChart(domesticPassengersByYear, internationalPassengersByYear, colours, "More and more people fly each year", "Total number of Domestic & International Passengers by year", "BITRE", "https://bitre.gov.au/publications/ongoing/domestic_airline_activity-time_series.aspx")
+```
+
+
+```{r}
+domesticFlightsByYear <- flights %>%
+  group_by(Year) %>%
+  summarise(totalPassengers = sum(DomesticTOTAL))
+
+internationalFlightsByYear <- flights %>%
+  group_by(Year) %>%
+  summarise(totalPassengers = sum(internationalTOTAL))
+
+colours <- c("#F8C776", "#1CC8DC")
+lineChart(domesticFlightsByYear, internationalFlightsByYear, colours, "Steadily Growing number of Flights", "Total number of Domestic & International Flights by year", "BITRE", "https://bitre.gov.au/publications/ongoing/domestic_airline_activity-time_series.aspx")
+```
+
+```{r}
+flightsByAirport <- flights %>%
+  filter(Year == 2016) %>%
+  group_by(AIRPORT) %>%
+  select(AIRPORT, DomesticTOTAL, internationalTOTAL, totalTOTAL) %>%
+  mutate(flightsPerDay = as.numeric(round(totalTOTAL/365, 0))) %>%
+  arrange(desc(flightsPerDay)) %>%
+  ungroup() %>%
+  top_n(20, flightsPerDay)
+
+colours <- "#05A5B2"
+flightsPerDay_chart(flightsByAirport, colours, "No surprise here: Major Cities supply most flights per day", "Number of Flights PER DAY for Airports (Top 20)", "BITRE", "https://bitre.gov.au/publications/ongoing/domestic_airline_activity-time_series.aspx")
+```
+
+```{r}
+airportMetaData <- data.table::fread("data/au-airports.csv") %>% mutate(municipality = toupper(municipality))
+
+airportAllData <- flightsByAirport %>% left_join(airportMetaData, by = c("AIRPORT" = "municipality"))
+```
+
+
+```{r}
+library(leaflet)
+
+icons <- awesomeIcons(
+  icon = 'android-plane',
+  iconColor = '#FFFFFF',
+  markerColor = "red",
+  library = 'ion'
+)
+
+leaflet() %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addAwesomeMarkers(airportAllData$longitude_deg, airportAllData$latitude_deg, icon = icons)
+```
+
