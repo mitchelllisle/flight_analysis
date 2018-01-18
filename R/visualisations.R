@@ -27,3 +27,4 @@ flightsPerDay_chart <- function(data, colours, title, subtitle, source, link){
     hc_add_theme(mlrTheme)
 }
 
+  

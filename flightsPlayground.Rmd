@@ -25,6 +25,12 @@ mlrTheme <- hc_theme(
   )
 )
 
+simpleCap <- function(x) {
+  s <- strsplit(x, " ")[[1]]
+  paste(toupper(substring(s, 1,1)), substring(s, 2),
+      sep="", collapse=" ")
+}
+
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
@@ -32,11 +38,13 @@ Domestic Flights by Year (Australia)
 ```{r}
 domesticPassengersByYear <- passengers %>%
   group_by(Year) %>%
-  summarise(totalPassengers = sum(DomesticTOTAL))
+  summarise(totalPassengers = sum(DomesticTOTAL)) %>%
+  mutate(percentChange = (totalPassengers-lag(totalPassengers))/lag(totalPassengers) * 100)
 
 internationalPassengersByYear <- passengers %>%
   group_by(Year) %>%
-  summarise(totalPassengers = sum(internationalTOTAL))
+  summarise(totalPassengers = sum(internationalTOTAL)) %>% 
+  mutate(percentChange = (totalPassengers-lag(totalPassengers))/lag(totalPassengers) * 100)
 
 colours <- c("#E34963", "#4A90E2")
 lineChart(domesticPassengersByYear, internationalPassengersByYear, colours, "More and more people fly each year", "Total number of Domestic & International Passengers by year", "BITRE", "https://bitre.gov.au/publications/ongoing/domestic_airline_activity-time_series.aspx")
@@ -62,23 +70,23 @@ flightsByAirport <- flights %>%
   group_by(AIRPORT) %>%
   select(AIRPORT, DomesticTOTAL, internationalTOTAL, totalTOTAL) %>%
   mutate(flightsPerDay = as.numeric(round(totalTOTAL/365, 0))) %>%
-  arrange(desc(flightsPerDay)) %>%
-  ungroup() %>%
-  top_n(20, flightsPerDay)
+  arrange(desc(flightsPerDay))
+  # ungroup() %>%
+  # top_n(20, flightsPerDay)
 
 colours <- "#05A5B2"
 flightsPerDay_chart(flightsByAirport, colours, "No surprise here: Major Cities supply most flights per day", "Number of Flights PER DAY for Airports (Top 20)", "BITRE", "https://bitre.gov.au/publications/ongoing/domestic_airline_activity-time_series.aspx")
 ```
 
 ```{r}
-airportMetaData <- data.table::fread("data/au-airports.csv") %>% mutate(municipality = toupper(municipality))
+airportMetaData <- data.table::fread("data/airports.csv")
 
-airportAllData <- flightsByAirport %>% left_join(airportMetaData, by = c("AIRPORT" = "municipality"))
+airportAllData <- flightsByAirport %>% left_join(airportMetaData, by = "AIRPORT") %>% mutate(prettyName = simpleCap(tolower(AIRPORT)))
+
 ```
-
-
 ```{r}
 library(leaflet)
+library(mapview)
 
 icons <- awesomeIcons(
   icon = 'android-plane',
@@ -87,8 +95,10 @@ icons <- awesomeIcons(
   library = 'ion'
 )
 
+
 leaflet() %>%
-  addProviderTiles(providers$CartoDB.Positron) %>%
-  addAwesomeMarkers(airportAllData$longitude_deg, airportAllData$latitude_deg, icon = icons)
+  addCircleMarkers(airportAllData$Lng, airportAllData$Lat, label = paste("Number of flights per day out of", airportAllData$prettyName, ":", airportAllData$flightsPerDay), radius = sqrt(airportAllData$flightsPerDay), stroke = FALSE, fillOpacity = 0.5) %>%
+  addLogo("https://user-images.githubusercontent.com/18128531/35080794-eeceaecc-fc63-11e7-9797-304102fdbc91.png", height = 30, width = 50, position = "topright") %>%
+  addProviderTiles(providers$CartoDB.Positron)
 ```
 
